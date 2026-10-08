@@ -27,27 +27,32 @@ const maxPhoneDigits = 13
 var isoTimestamp = regexp.MustCompile(
 	`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d{1,9})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?`)
 
-// Formatted identifiers that are not phone numbers. They are kept as they are,
-// because a CEP, CPF or CNPJ is not contact data.
+// Formatted identifiers that are not phone numbers. The phone rules keep them:
+// a CEP is not personal data, and a CPF or CNPJ is masked by RedactDocuments
+// (which runs first) in its own format, not as a phone.
 var (
 	exactCEP  = regexp.MustCompile(`^\d{5}-\d{3}$`)
 	exactCPF  = regexp.MustCompile(`^\d{3}\.\d{3}\.\d{3}-\d{2}$`)
 	exactCNPJ = regexp.MustCompile(`^\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}$`)
 )
 
-// RedactText masks phone numbers in message text before the model sees it.
+// RedactText masks phone numbers, e-mail addresses, CPFs and CNPJs in message
+// text before the model sees it. E-mail addresses and documents are masked
+// first, by RedactDocuments ("j***@x.com", "***.***.***-09",
+// "**.***.***/****-95"); the phone rules below run on the result.
 //
 // A candidate run (digits with short separators) is split into single phones:
 // ",", ";", "/", "|" and line breaks always split; a space splits when the
 // group so far has 10 to 13 digits. Each phone is masked on its own, so
 // "11987654321, 11912345678" gives "119******21, 119******78". A group of more
 // than 13 digits that cannot be split keeps only its last two digits. The rules of RedactLog still decide what is a phone: dates,
-// times, money amounts, fewer than 8 digits, a formatted CEP, CPF or CNPJ, and
-// ISO-8601 timestamps are kept. JIDs become "<jid>". Only digits change, and
-// fullwidth characters outside the phone stay as typed. Applying RedactText
-// twice gives the same result.
+// times, money amounts, fewer than 8 digits, a formatted CEP, and ISO-8601
+// timestamps are kept. JIDs become "<jid>". Only digits change, and fullwidth
+// characters outside the phone stay as typed. Applying RedactText twice gives
+// the same result.
 func RedactText(s string) string {
 	s = jidPattern.ReplaceAllString(s, jidPlaceholder)
+	s = RedactDocuments(s)
 	orig, spans := scanGroups(s, true)
 
 	var b strings.Builder
