@@ -13,17 +13,17 @@ import (
 
 var wantTools = []string{
 	"whatsapp_status", "list_new_messages", "list_chats", "get_chat_messages",
-	"search_messages", "list_contacts", "search_contacts", "list_categories",
+	"search_messages", "list_contacts", "search_contacts", "list_categories", "read_media",
 	"send_message", "share_contact", "mark_as_read", "set_contact_category",
 }
 
 // readTools is how many of wantTools are read tools; the rest write.
-const readTools = 8
+const readTools = 9
 
-// TestToolsListHasTwelveToolsWithSchemas checks tools/list: the eight read
+// TestToolsListHasThirteenToolsWithSchemas checks tools/list: the nine read
 // tools and the four write tools, each with an input and an output schema, and
 // the read-only hint on the read tools only.
-func TestToolsListHasTwelveToolsWithSchemas(t *testing.T) {
+func TestToolsListHasThirteenToolsWithSchemas(t *testing.T) {
 	f := newFixture(t)
 	res, err := f.cs.ListTools(f.ctx, nil)
 	if err != nil {
