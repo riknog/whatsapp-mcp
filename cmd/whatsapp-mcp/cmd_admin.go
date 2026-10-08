@@ -10,6 +10,7 @@ import (
 	localcat "github.com/riknog/whatsapp-mcp/internal/category"
 	"github.com/riknog/whatsapp-mcp/internal/identity"
 	"github.com/riknog/whatsapp-mcp/internal/privacy"
+	"github.com/riknog/whatsapp-mcp/internal/store"
 	"github.com/riknog/whatsapp-mcp/internal/toolerr"
 )
 
@@ -35,8 +36,15 @@ func cmdHide(ctx context.Context, a *app, out io.Writer, args []string, on bool)
 		return err
 	}
 	if !t.HasChat {
-		return toolerr.New(toolerr.CodeInvalidArgument,
-			fmt.Sprintf("Não há conversa com %s para ocultar ou mostrar.", privacy.RedactText(t.Name)), nil)
+		if !on {
+			return toolerr.New(toolerr.CodeInvalidArgument,
+				fmt.Sprintf("Não há conversa com %s para mostrar.", privacy.RedactText(t.Name)), nil)
+		}
+		// A saved contact without a conversation yet: the chat row is created
+		// now, already hidden, so the first message never reaches the model.
+		if err := a.st.UpsertChat(ctx, store.Chat{JID: t.JID, Ref: t.Ref, Kind: "direct"}); err != nil {
+			return err
+		}
 	}
 	if t.Hidden == on {
 		fmt.Fprintf(out, "Nada a fazer: %s já está %s.\n", label(t.Name, t.Ref), hiddenWord(on))
