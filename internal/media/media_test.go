@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -64,8 +65,10 @@ func helper(args []string) int {
 	return 2
 }
 
+// writeOut writes to the process's standard output. syscall.Stdout is 1 on
+// Unix and the console handle on Windows, where descriptor 1 does not exist.
 func writeOut(s string) int {
-	f := os.NewFile(1, "out")
+	f := os.NewFile(uintptr(syscall.Stdout), "out")
 	if _, err := f.WriteString(s); err != nil {
 		return 1
 	}
