@@ -42,11 +42,13 @@ var (
 // digits, with separators of any kind) with "<phone>". Whole candidates that
 // are exactly a date (dd/mm/aaaa, dd-mm-aaaa, dd.mm.aaaa, aaaa-mm-dd), a date
 // with a time (hh:mm or hh:mm:ss), or a Brazilian money amount are kept.
-// Fullwidth ASCII is folded to ASCII first. The output does not change when
-// RedactLog is applied again.
+// Fullwidth ASCII is folded to ASCII first. E-mail addresses become "<email>"
+// and CPFs and CNPJs "<doc>" (see RedactDocuments). The output does not change
+// when RedactLog is applied again.
 func RedactLog(s string) string {
 	s = foldFullwidth(s)
 	s = jidPattern.ReplaceAllString(s, jidPlaceholder)
+	s = redactDocumentsLog(s)
 
 	var b strings.Builder
 	last := 0

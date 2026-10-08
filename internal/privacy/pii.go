@@ -22,6 +22,8 @@ const maxPlainInteger = 1e7
 //   - a WhatsApp JID (@s.whatsapp.net, @c.us, @lid, @g.us);
 //   - a phone number that is not masked (the same detection as RedactText, so
 //     masked forms such as "+55 11 9****-**21" pass);
+//   - an e-mail address, a CPF or a CNPJ that is not masked (the detection of
+//     RedactDocuments, so "j***@x.com" and "***.***.***-09" pass);
 //   - a number of 8 or more integer digits, wherever it is in the tree.
 //
 // The error names the JSON path only. It never includes the value, so the
@@ -76,6 +78,9 @@ func checkPIIString(path, s string) error {
 	}
 	if hasReadablePhone(s) {
 		return fmt.Errorf("privacy: telefone não mascarado em %s", path)
+	}
+	if hasReadableDocument(s) {
+		return fmt.Errorf("privacy: e-mail, CPF ou CNPJ não mascarado em %s", path)
 	}
 	return nil
 }
