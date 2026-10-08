@@ -1,7 +1,8 @@
 // Command whatsapp-mcp is a local MCP server for WhatsApp.
 //
-// stdout belongs to the MCP protocol. Only the "version" subcommand writes to
-// stdout; every other command writes to stderr.
+// stdout belongs to the MCP protocol. Only the "version" and "watch"
+// subcommands write to stdout (watch's lines are read by Claude Code's Monitor
+// tool or a hook); every other command writes to stderr.
 package main
 
 import (
@@ -73,6 +74,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return serve(stderr)
 	case "logout":
 		return logout(rest, stderr)
+	case "watch":
+		return watch(rest, stdout, stderr)
 	}
 	fn, ok := commands[cmd]
 	if !ok {
@@ -88,6 +91,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	defer a.close()
 	return fail(stderr, cmd, fn(ctx, a, stderr, rest))
+}
+
+// notifyContext ends on SIGINT or SIGTERM.
+func notifyContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
 // fail turns a command's error into the exit code, printing it first.
@@ -189,6 +197,8 @@ func usage(w io.Writer) {
   category add|remove "Cat" "Nome"    categorias locais
   category list
   purge --older-than 30d | --contact "Nome" | --all  [--yes]
+  watch [--interval 5s] [--include-groups] [--once]
+                                      avisa (no stdout) quando chega mensagem nova
   logout [--wipe]                     desvincula; --wipe apaga os dados
   version
 `)
