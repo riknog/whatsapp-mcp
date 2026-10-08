@@ -29,7 +29,7 @@ func (blockingClient) Connect(ctx context.Context) error {
 func (blockingClient) IsConnected() bool { return false }
 
 // TestServeAnswersBeforeWhatsAppConnects checks that initialize is
-// answered in under 500 ms while WhatsApp is still unreachable, and the server
+// answered within initializeBudget while WhatsApp is still unreachable, and the server
 // stops when the client disconnects.
 func TestServeAnswersBeforeWhatsAppConnects(t *testing.T) {
 	home := testHome(t)
@@ -70,8 +70,8 @@ func TestServeAnswersBeforeWhatsAppConnects(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("initialize was not answered within 5 s")
 	}
-	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-		t.Errorf("initialize took %s, want < 500 ms", elapsed)
+	if elapsed := time.Since(start); initializeBudget > 0 && elapsed > initializeBudget {
+		t.Errorf("initialize took %s, want < %s", elapsed, initializeBudget)
 	}
 
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "whatsapp_status"})
