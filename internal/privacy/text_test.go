@@ -24,6 +24,14 @@ func TestRedactTextTable(t *testing.T) {
 		{"jid", "enviado para 5511987654321@s.whatsapp.net", "enviado para <jid>"},
 		{"lid", "contato 123456789012345@lid", "contato <jid>"},
 
+		// E-mail addresses, CPFs and CNPJs keep only a hint.
+		{"email", "meu e-mail: joao.silva@empresa.com.br.", "meu e-mail: j***@empresa.com.br."},
+		{"cpf formatted", "CPF 123.456.789-09", "CPF ***.***.***-09"},
+		{"cnpj formatted", "CNPJ 12.345.678/0001-95", "CNPJ **.***.***/****-95"},
+		{"cpf digits only", "cpf 12345678909 ok", "cpf ***.***.***-09 ok"},
+		{"cnpj digits only", "cnpj 12345678000195", "cnpj **.***.***/****-95"},
+		{"email with digits then phone", "11987654321@gmail.com e 98765-4321", "1***@gmail.com e 9****-**21"},
+
 		// Adjacent phones: each one is masked on its own.
 		{"two phones comma space", "11987654321, 11912345678", "119******21, 119******78"},
 		{"two phones space", "11987654321 11912345678", "119******21 119******78"},
@@ -50,8 +58,6 @@ func TestRedactTextTable(t *testing.T) {
 		{"currency big", "R$ 12.345.678,90", "R$ 12.345.678,90"},
 		{"cep", "01310-100", "01310-100"},
 		{"cep in sentence", "CEP 01310-100 fica perto", "CEP 01310-100 fica perto"},
-		{"cpf formatted", "CPF 123.456.789-09", "CPF 123.456.789-09"},
-		{"cnpj formatted", "CNPJ 12.345.678/0001-95", "CNPJ 12.345.678/0001-95"},
 		{"seven digits", "lote 1234567 ok", "lote 1234567 ok"},
 		{"apartment", "Apto 1203 bloco 4", "Apto 1203 bloco 4"},
 		{"counters", "3 mensagens, 12 chats", "3 mensagens, 12 chats"},
@@ -75,6 +81,8 @@ func TestRedactTextIsIdempotent(t *testing.T) {
 		"Tel ５５１１９８７６５４３２１ e 98765-4321",
 		"07/10/2026 19:30 R$ 1.234,56 CEP 01310-100",
 		"5511987654321@s.whatsapp.net",
+		"CPF 123.456.789-09, CNPJ 12345678000195, joao@x.com.br",
+		"+12345678909",
 	}
 	for _, in := range inputs {
 		once := RedactText(in)
