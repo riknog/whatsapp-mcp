@@ -1,6 +1,6 @@
 {
   "name": "whatsapp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Instala, configura e ensina o Claude a usar o whatsapp-mcp: ler e responder o WhatsApp sem nunca ver números de telefone.",
   "author": {
     "name": "riknog"
