@@ -15,7 +15,10 @@ Códigos de erro: `not_logged_in`, `disconnected`, `contact_not_found`, `ambiguo
 `queue_full`, `duplicate_message`, `quiet_hours`, `send_disabled`, `message_too_long`, `invalid_argument`,
 `send_failed` (o WhatsApp recusou ou a rede falhou duas vezes; nada foi entregue),
 `send_uncertain` (o WhatsApp não respondeu a tempo; a mensagem **pode** ter sido entregue — não reenviar sem conferir
-com `get_chat_messages` ou com o dono).
+com `get_chat_messages` ou com o dono),
+`media_disabled` (leitura de mídia desligada em `[media]` ou sem comando para aquele tipo),
+`media_unavailable` (sem chaves de download, arquivo grande demais, expirado ou removido no WhatsApp),
+`media_tool_failed` (o transcritor ou o OCR falhou ou passou do tempo).
 
 Formato de mensagem (`Message`) usado nas saídas:
 
@@ -107,6 +110,26 @@ Saída: `{matches: [{name, contact_ref, categories, match: "exact"|"prefix"|"con
 
 ### `list_categories`
 Sem params. `{categories: [{name, source, count}]}`.
+
+### `read_media`
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `contact` | string | sim | Nome ou ref. |
+| `message_id` | string | sim | ID de uma mensagem de áudio ou imagem dessa conversa. |
+
+Desligada por padrão (`[media] enabled = false` → `media_disabled`). Baixa o arquivo sob demanda com as
+chaves guardadas na ingestão e:
+- áudio → `audio_command` (transcritor local) → texto;
+- imagem, `image_mode = "ocr"` → `ocr_command` (OCR local) → texto;
+- imagem, `image_mode = "vision"` → a imagem vai como `ImageContent`, **sem mascaramento**, e `text` fica vazio.
+
+O texto passa pela mesma redação das mensagens (telefone, e-mail, CPF, CNPJ) e é cortado em 4 000
+caracteres. A transcrição bruta fica em cache no `data.db` (tabela `media`); a segunda leitura não
+baixa nem roda nada (`cached: true`). Conversa oculta → `chat_hidden`/`contact_not_found`; mensagem que
+não é áudio nem imagem → `invalid_argument`; sem chaves (anterior à tabela `media` ou visualização
+única), acima de `max_mb`, expirada no WhatsApp → `media_unavailable`; programa falhou → `media_tool_failed`.
+Saída: `{contact, contact_ref, message_id, type: "audio"|"image", source: "transcription"|"ocr"|"vision", text, cached, notes?}`.
+`whatsapp_status` ganha `media: {enabled, audio, image_mode}`.
 
 ---
 

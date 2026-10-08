@@ -132,6 +132,7 @@ mensagem clara.
 | `share_contact` | Envia o cartão de um contato liberado com `shareable add`. |
 | `mark_as_read` | Marca uma conversa como lida. |
 | `set_contact_category` | Põe ou tira um contato de uma categoria local. |
+| `read_media` | Lê **um** áudio (transcrição local) ou imagem (OCR local). Desligada por padrão: veja [Áudio e imagem](#áudio-e-imagem). |
 
 Detalhes, parâmetros e erros: [docs/02-TOOLS.md](docs/02-TOOLS.md).
 
@@ -142,11 +143,12 @@ Detalhes, parâmetros e erros: [docs/02-TOOLS.md](docs/02-TOOLS.md).
 | `login [--pair-phone 5511...]` | Vincula este computador (QR ou código). |
 | `serve` | Servidor MCP (o Claude chama sozinho). |
 | `status` | Sessão, teste de conexão (10 s), conversas, mensagens, fila e tamanho dos dados. |
-| `hide "Nome"` / `unhide "Nome"` / `hidden` | Oculta uma conversa do Claude (na hora, inclusive da busca). |
+| `hide "Nome"` / `unhide "Nome"` / `hidden` | Oculta uma conversa do Claude (na hora, inclusive da busca). Funciona também para um contato salvo que ainda não tem conversa. |
 | `shareable add\|remove "Nome"` / `shareable list` | Contatos que o Claude pode compartilhar. |
 | `category add\|remove "Categoria" "Nome"` / `category list` | Categorias locais. |
 | `purge --older-than 30d \| --contact "Nome" \| --all` | Apaga mensagens guardadas. Sem `--yes` só mostra o que faria. |
 | `logout [--wipe]` | Desvincula o aparelho. `--wipe` também apaga os dados locais. |
+| `watch [--interval 5s] [--include-groups] [--once]` | Avisa no stdout quando chega mensagem nova (para o Monitor ou um hook do Claude Code). Veja [Aviso de mensagem nova](#aviso-de-mensagem-nova). |
 | `version` | Versão, commit e versão do whatsmeow. |
 
 Quando um nome corresponde a mais de um contato, o comando lista os candidatos com o
@@ -184,15 +186,76 @@ require_allowlist = true       # só contatos liberados com `whatsapp-mcp sharea
 [read]
 mark_read_enabled = true
 history_sync_days = 30
+
+[media]
+enabled = false                # liga a tool read_media
+max_mb = 16                    # tamanho máximo do arquivo
+timeout_s = 120                # download + transcrição/OCR
+audio_command = []             # transcritor; vazio = áudio não é lido
+image_mode = "ocr"             # "ocr", "vision" (imagem vai ao Claude sem tratamento) ou "off"
+ocr_command = []               # OCR; vazio = imagem não é lida no modo "ocr"
+ffmpeg = "ffmpeg"              # usado quando o comando pede {wav}
 ```
 
 O `serve` lê a configuração ao iniciar: reinicie o Claude depois de mudar.
+
+## Áudio e imagem
+
+A tool `read_media` baixa **um** áudio ou imagem quando o Claude pede, roda um programa **no seu
+computador** e devolve só o texto, com números, e-mails, CPF e CNPJ mascarados. O arquivo fica numa
+pasta temporária dentro de `~/.whatsapp-mcp` e é apagado em seguida; a transcrição fica guardada no
+`data.db` (e some junto com a mensagem no `purge` ou na retenção). Mensagens de visualização única
+nunca são lidas, e mensagens recebidas antes desta versão não têm as chaves de download.
+
+Os comandos rodam sem shell. Marcadores: `{input}` (arquivo como chegou), `{wav}` (WAV 16 kHz mono
+gerado com FFmpeg) e `{outdir}` (pasta temporária; se o programa gravar um `.txt` nela, é ele que vale).
+Exemplos:
+
+```ini
+[media]
+enabled = true
+# whisper.cpp (leve, roda em CPU): imprime o texto no stdout
+audio_command = ["whisper-cli", "-m", "C:/modelos/ggml-small.bin", "-l", "pt", "-nt", "-f", "{wav}"]
+# ou openai-whisper (Python): grava um .txt em {outdir}
+# audio_command = ["whisper", "{input}", "--model", "small", "--language", "pt", "--output_format", "txt", "--output_dir", "{outdir}"]
+image_mode = "ocr"
+ocr_command = ["tesseract", "{input}", "stdout", "-l", "por"]
+```
+
+`image_mode = "vision"` manda a imagem em si para o Claude: ele "vê" a foto, mas **sem mascaramento**
+(um documento fotografado aparece inteiro). Use só se aceitar isso. `whatsapp_status` mostra o que está
+ligado em `media`.
+
+## Aviso de mensagem nova
+
+`whatsapp-mcp watch` só lê o `data.db` (quem recebe as mensagens é o `serve`, que precisa estar
+rodando) e escreve **uma linha por conversa** com mensagem nova: nome, `contact_ref` e quantidade. O
+texto da mensagem nunca sai por aqui, e conversas ocultas nunca aparecem. Grupos só com
+`--include-groups`.
+
+No Claude Code, peça: *"use o Monitor com `whatsapp-mcp watch` e me avise quando chegar mensagem"*.
+Cada linha vira um aviso para o Claude, que pode chamar `list_new_messages`.
+
+Para lembrar o Claude a cada prompt, use `--once` num hook `UserPromptSubmit` (em `.claude/settings.json`).
+Ele imprime as conversas com mensagens que o Claude ainda não viu, ou nada:
+
+```jsonc
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "whatsapp-mcp watch --once"}]}
+    ]
+  }
+}
+```
 
 ## Privacidade e LGPD
 
 - **O Claude nunca vê números de telefone.** Contatos aparecem pelo nome e por um `contact_ref`
   opaco (`c_…`), que não dá para converter em número. Números digitados no texto das mensagens
   também são mascarados.
+- **E-mails, CPF e CNPJ** no texto também são mascarados antes de chegar ao Claude
+  (`j***@exemplo.com`, `***.***.***-09`, `**.***.***/****-95`), inclusive em transcrições e OCR.
 - Tudo fica **no seu computador**: `data.db` (mensagens), `session.db` (sessão do WhatsApp) e
   `ref.key`. Arquivos com permissão 0600, pasta 0700 (no Windows, quem protege é a permissão da sua pasta de
   usuário). Nada é enviado para servidores do projeto.
@@ -201,7 +264,9 @@ O `serve` lê a configuração ao iniciar: reinicie o Claude depois de mudar.
 - Direito de eliminação: `purge --contact "Nome" --yes` apaga a conversa com uma pessoa;
   `purge --all --yes` apaga tudo; `logout --wipe` apaga também a sessão e a chave.
   O espaço é compactado e o conteúdo apagado não é recuperável.
-- `hide` esconde uma conversa do Claude por completo: listas, busca, envio e compartilhamento.
+- `hide` esconde uma conversa do Claude por completo: listas, busca, envio, compartilhamento,
+  `read_media` e `watch`. As mensagens continuam guardadas no `data.db` (use `purge --contact` para
+  apagá-las), e o que a pessoa escreve em **grupos** continua visível.
 - Grupos: só leitura por padrão (`allow_groups = false`).
 
 Mais em [docs/03-SEGURANCA-LGPD.md](docs/03-SEGURANCA-LGPD.md).

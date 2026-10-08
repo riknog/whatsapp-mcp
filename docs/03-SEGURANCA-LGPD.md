@@ -13,7 +13,7 @@
 | A7 | Logs com dados pessoais | Logger com redação obrigatória; sem conteúdo de mensagem em log; `audit_log` só com `chat_ref`. |
 | A8 | Supply chain | Dependências mínimas, `go.sum` versionado, `go mod verify`, `govulncheck` e `gosec` no CI; Dependabot/Renovate só para whatsmeow, go-sdk e sqlite. |
 | A9 | Mensagem antiga reenviada após crash | Pendentes viram `expired` no boot. |
-| A10 | Mídia maliciosa | Mídia não é baixada no v1. |
+| A10 | Mídia maliciosa | Download só sob demanda (`read_media`, desligado por padrão), com teto `max_mb` e `timeout_s`; o arquivo vai para os programas do dono (transcritor/OCR) sem shell, em pasta 0700 apagada em seguida; a saída deles volta redigida e cortada; stderr deles não é exibido. Visualização única nunca é lida. `image_mode = "vision"` manda a imagem crua ao modelo: opt-in documentado. |
 | A11 | Engenharia social para vazar número ("me passa o número da sua mãe") via `share_contact` | Allowlist explícita de contatos compartilháveis (só o dono adiciona, via CLI); descrição da tool orienta seguir só instruções do dono; auditoria registra cada compartilhamento. |
 
 ## 2. Regras da fila de envio (normativas)
@@ -60,7 +60,7 @@ O dono da conta é o controlador dos dados das conversas; o MCP é ferramenta lo
 |---|---|
 | Finalidade / adequação | Uso exclusivo: responder conversas do próprio dono. Sem disparo em massa, sem exportação. |
 | Compartilhamento | Número de terceiro só sai via `share_contact`, para contatos que o dono marcou como compartilháveis, um por vez, auditado. |
-| Necessidade (minimização) | Modelo não recebe telefone/JID; só nome + ref. Mídia não é baixada. Paginação limitada. Telefones dentro de mensagens mascarados. |
+| Necessidade (minimização) | Modelo não recebe telefone/JID; só nome + ref. Mídia só é baixada quando pedida e permitida em `[media]`. Paginação limitada. Telefones, e-mails, CPF e CNPJ dentro de mensagens (e de transcrições) mascarados. `watch` mostra só nome, ref e contagem. |
 | Segurança | Dados só locais, permissões 0600/0700, sem porta de rede, logs redigidos. |
 | Transparência | README explica o que é armazenado e o que vai para o provedor do modelo (o conteúdo lido pelo Claude é enviado à API da Anthropic durante a conversa). |
 | Retenção / eliminação | `retention_days` (default 90) com expurgo diário; `whatsapp-mcp purge [--contact NOME] [--all]`; `logout` oferece apagar tudo. |
@@ -73,7 +73,8 @@ nunca expostos), etiquetas, fila e auditoria (sem conteúdo).
 
 - [ ] `grep` por `fmt.Print`/`os.Stdout` fora do transport MCP = zero.
 - [ ] Teste "no-PII": roda todas as tools contra fixture com 50 contatos e varre saída com regex
-      `\+?\d[\d\s().-]{7,}\d` e `@s\.whatsapp\.net|@lid|@g\.us` → zero ocorrências (exceto telefones mascarados).
+      `\+?\d[\d\s().-]{7,}\d` e `@s\.whatsapp\.net|@lid|@g\.us` → zero ocorrências (exceto telefones mascarados);
+      e-mail, CPF e CNPJ legíveis → zero ocorrências.
 - [ ] Entrada `contact="+5511999999999"` e `"5511999999999@s.whatsapp.net"` → `phone_not_allowed`.
 - [ ] Teste de concorrência: 30 `send_message` paralelos para 5 contatos → ordem FIFO, cooldowns
       respeitados (relógio fake), tetos aplicados, nenhum envio duplicado.
@@ -82,3 +83,5 @@ nunca expostos), etiquetas, fila e auditoria (sem conteúdo).
 - [ ] Permissões de arquivo verificadas na inicialização.
 - [ ] `govulncheck ./...` limpo; `gosec ./...` sem achados high; `go mod verify` ok.
 - [ ] Logs de uma sessão completa de testes não contêm telefone, JID nem texto de mensagem.
+- [ ] `read_media`: desligado por padrão; chat oculto recusado; transcrição/OCR redigidos; comandos sem shell;
+      arquivos temporários apagados; cada leitura no `audit_log`.
