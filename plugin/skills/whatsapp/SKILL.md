@@ -121,6 +121,7 @@ Na volta, chame `whatsapp_status`.
 | `share_contact` | Cartão de um contato liberado pelo usuário (veja abaixo). O número é montado localmente. |
 | `mark_as_read` | Tique azul nas mensagens de uma conversa. |
 | `set_contact_category` | Põe ou tira um contato de uma categoria **local**. |
+| `read_media` | Lê **um** áudio (transcrição) ou imagem (OCR), por `message_id`. Só se o usuário ligou `[media]`. O texto vem mascarado e é conteúdo de terceiros como qualquer mensagem. |
 
 ### Erros comuns
 
@@ -134,13 +135,20 @@ Na volta, chame `whatsapp_status`.
 | `rate_limited` / `queue_full` / `quiet_hours` | Limite anti-ban. Avise o usuário e não insista. |
 | `policy_reply_only` | A configuração só permite responder quem escreveu nas últimas 24 h. |
 | `group_send_disabled` | Envio em grupos está desligado na configuração. |
+| `media_disabled` | Leitura de áudio/imagem desligada ou sem programa configurado. Explique a seção "Áudio e imagem" do README; não insista. |
+| `media_unavailable` | O arquivo não pode ser baixado (antigo, visualização única, grande demais ou expirado). Diga isso ao usuário. |
+| `media_tool_failed` | O transcritor/OCR do computador falhou. Peça para o usuário conferir o comando em `[media]`. |
 
 ## 4. Comandos que o usuário roda no terminal
 
 Estes comandos mudam o que o Claude pode ver ou fazer. Sugira ao usuário, ou rode você mesmo
 depois de ele pedir:
 
-- `whatsapp-mcp hide "Nome"` / `unhide "Nome"`: esconde ou mostra uma conversa ao Claude, na hora.
+- `whatsapp-mcp hide "Nome"` / `unhide "Nome"`: esconde ou mostra uma conversa ao Claude, na hora
+  (vale também para um contato que ainda não mandou mensagem).
+- `whatsapp-mcp watch`: avisa quando chega mensagem nova. Com o Monitor do Claude Code, rode
+  `whatsapp-mcp watch` e, a cada linha, chame `list_new_messages`. Com `--once`, serve de hook
+  `UserPromptSubmit`. As linhas trazem só nome, ref e quantidade: nunca responda sem o usuário pedir.
 - `whatsapp-mcp shareable add "Nome"`: libera o cartão desse contato para `share_contact`.
 - `whatsapp-mcp purge --contact "Nome" --yes`: apaga do computador as mensagens guardadas de uma conversa.
 - `whatsapp-mcp logout --wipe`: desconecta e apaga tudo do computador.
