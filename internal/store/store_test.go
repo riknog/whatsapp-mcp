@@ -65,8 +65,8 @@ func TestMigrationsFromZeroAndIdempotent(t *testing.T) {
 		t.Fatalf("primeira abertura: %v", err)
 	}
 	v, err := s.SchemaVersion(ctx)
-	if err != nil || v != 1 {
-		t.Fatalf("SchemaVersion = %d, %v; quero 1", v, err)
+	if err != nil || v != 2 {
+		t.Fatalf("SchemaVersion = %d, %v; quero 2", v, err)
 	}
 	if err := s.migrate(ctx); err != nil {
 		t.Fatalf("migrate repetido: %v", err)
@@ -80,8 +80,8 @@ func TestMigrationsFromZeroAndIdempotent(t *testing.T) {
 		t.Fatalf("segunda abertura: %v", err)
 	}
 	defer s2.Close()
-	if v, _ := s2.SchemaVersion(ctx); v != 1 {
-		t.Fatalf("versão após reabrir = %d, quero 1", v)
+	if v, _ := s2.SchemaVersion(ctx); v != 2 {
+		t.Fatalf("versão após reabrir = %d, quero 2", v)
 	}
 }
 
@@ -90,7 +90,8 @@ func TestLoadMigrationsEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadMigrations: %v", err)
 	}
-	if len(migs) != 1 || migs[0].name != "001_init.sql" || migs[0].version != 1 {
+	if len(migs) != 2 || migs[0].name != "001_init.sql" || migs[0].version != 1 ||
+		migs[1].name != "002_media.sql" || migs[1].version != 2 {
 		t.Fatalf("migrations = %+v", migs)
 	}
 	if !strings.Contains(migs[0].sql, "messages_fts_ai") {
@@ -263,7 +264,7 @@ func TestToolerrCodeOnInvalidArgument(t *testing.T) {
 func TestBrokenMigrationRollsBack(t *testing.T) {
 	s, _ := newTestStore(t)
 	ctx := context.Background()
-	bad := migration{version: 2, name: "002_bad.sql", sql: `CREATE TABLE half (x INTEGER); THIS IS NOT SQL;`}
+	bad := migration{version: 3, name: "003_bad.sql", sql: `CREATE TABLE half (x INTEGER); THIS IS NOT SQL;`}
 	if err := s.applyMigration(ctx, bad); err == nil {
 		t.Fatal("migration inválida aceita")
 	}
@@ -274,8 +275,8 @@ func TestBrokenMigrationRollsBack(t *testing.T) {
 	if n != 0 {
 		t.Error("tabela parcial sobreviveu ao rollback")
 	}
-	if v, _ := s.SchemaVersion(ctx); v != 1 {
-		t.Errorf("versão = %d após falha, quero 1", v)
+	if v, _ := s.SchemaVersion(ctx); v != 2 {
+		t.Errorf("versão = %d após falha, quero 2", v)
 	}
 	// An already-applied version is a no-op, even if its SQL is broken.
 	if err := s.applyMigration(ctx, migration{version: 1, name: "001_init.sql", sql: "bogus"}); err != nil {

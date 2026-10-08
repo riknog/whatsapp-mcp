@@ -42,6 +42,15 @@ func designDefaults(home string) Config {
 			MarkReadEnabled: true,
 			HistorySyncDays: 30,
 		},
+		Media: MediaConfig{
+			Enabled:      false,
+			MaxMB:        16,
+			TimeoutS:     120,
+			AudioCommand: []string{},
+			ImageMode:    "ocr",
+			OCRCommand:   []string{},
+			FFmpeg:       "ffmpeg",
+		},
 	}
 }
 
@@ -93,6 +102,13 @@ func TestDefaultsFieldByField(t *testing.T) {
 		{"share.require_allowlist", d.Share.RequireAllowlist, true},
 		{"read.mark_read_enabled", d.Read.MarkReadEnabled, true},
 		{"read.history_sync_days", d.Read.HistorySyncDays, 30},
+		{"media.enabled", d.Media.Enabled, false},
+		{"media.max_mb", d.Media.MaxMB, 16},
+		{"media.timeout_s", d.Media.TimeoutS, 120},
+		{"media.audio_command", d.Media.AudioCommand, []string{}},
+		{"media.image_mode", d.Media.ImageMode, "ocr"},
+		{"media.ocr_command", d.Media.OCRCommand, []string{}},
+		{"media.ffmpeg", d.Media.FFmpeg, "ffmpeg"},
 	}
 	for _, c := range checks {
 		if !reflect.DeepEqual(c.got, c.want) {
@@ -159,6 +175,12 @@ func TestLoadRejectsInvalidValuesNamingTheKey(t *testing.T) {
 		{"quiet hours same start and end", "[send]\nquiet_hours = \"08:00-08:00\"\n", "send.quiet_hours"},
 		{"unknown key", "[send]\nallow_grups = true\n", "send.allow_grups"},
 		{"wrong type for bool", "[send]\nenabled = \"yes\"\n", "send.enabled"},
+		{"media size zero", "[media]\nmax_mb = 0\n", "media.max_mb"},
+		{"media size too big", "[media]\nmax_mb = 500\n", "media.max_mb"},
+		{"media timeout zero", "[media]\ntimeout_s = 0\n", "media.timeout_s"},
+		{"media image mode", "[media]\nimage_mode = \"cloud\"\n", "media.image_mode"},
+		{"media empty program", "[media]\naudio_command = [\"\", \"{input}\"]\n", "media.audio_command"},
+		{"media empty ocr program", "[media]\nocr_command = [\"\"]\n", "media.ocr_command"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,6 +194,27 @@ func TestLoadRejectsInvalidValuesNamingTheKey(t *testing.T) {
 				t.Fatalf("error does not name key %q: %v", tc.key, err)
 			}
 		})
+	}
+}
+
+func TestLoadMediaSection(t *testing.T) {
+	home := t.TempDir()
+	writeConfig(t, home, `
+[media]
+enabled = true
+audio_command = ["whisper-cli", "-m", "base.bin", "-f", "{wav}"]
+image_mode = "vision"
+`)
+	cfg, err := Load(home)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	m := cfg.Media
+	if !m.Enabled || m.ImageMode != ImageModeVision || len(m.AudioCommand) != 5 || m.AudioCommand[4] != "{wav}" {
+		t.Fatalf("media = %+v", m)
+	}
+	if m.MaxMB != 16 || m.TimeoutS != 120 || m.FFmpeg != "ffmpeg" {
+		t.Fatalf("unset media keys changed: %+v", m)
 	}
 }
 

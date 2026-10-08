@@ -18,6 +18,7 @@ import (
 	"github.com/riknog/whatsapp-mcp/internal/identity"
 	"github.com/riknog/whatsapp-mcp/internal/ingest"
 	"github.com/riknog/whatsapp-mcp/internal/logging"
+	"github.com/riknog/whatsapp-mcp/internal/media"
 	"github.com/riknog/whatsapp-mcp/internal/privacy"
 	"github.com/riknog/whatsapp-mcp/internal/sendqueue"
 	"github.com/riknog/whatsapp-mcp/internal/store"
@@ -28,6 +29,7 @@ import (
 const (
 	dataFileName    = "data.db"
 	sessionFileName = "session.db"
+	mediaScratchDir = "tmp" // read_media scratch files, removed after each call
 )
 
 // retentionEvery is how often expired messages are purged.
@@ -122,6 +124,7 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 		Client:      client,
 		Queue:       queue,
 		Sender:      queue,
+		Media:       media.New(cfg.Media, filepath.Join(opts.Home, mediaScratchDir)),
 		Config:      *cfg,
 		Clock:       clk,
 		LastEventAt: func() time.Time { return lastEventTime(&lastEvent) },

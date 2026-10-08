@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -141,6 +142,7 @@ func (in *Ingestor) message(ctx context.Context, e MessageEvent) error {
 	m := store.Message{
 		ChatJID: chat, ID: e.ID, SenderJID: sender, FromMe: e.FromMe, TS: ts,
 		Kind: e.Kind, Text: e.Text, Caption: e.Caption, QuotedID: e.QuotedID,
+		Media: storeMedia(e.Media),
 	}
 	if _, err := in.st.InsertMessage(ctx, m); err != nil {
 		return fmt.Errorf("ingest: gravar mensagem: %w", err)
@@ -349,6 +351,7 @@ func (in *Ingestor) conversation(ctx context.Context, syncType string, c Convers
 		msgs = append(msgs, store.Message{
 			ChatJID: chat, ID: m.ID, SenderJID: sender, FromMe: m.FromMe, TS: unixOr(m.Time, time.Time{}),
 			Kind: m.Kind, Text: m.Text, Caption: m.Caption, QuotedID: m.QuotedID,
+			Media: storeMedia(m.Media),
 		})
 	}
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].TS < msgs[j].TS })
@@ -561,6 +564,26 @@ func isCategoryList(listType string) bool {
 
 func isLID(jid string) bool { return strings.HasSuffix(jid, "@lid") }
 func isPN(jid string) bool  { return strings.HasSuffix(jid, "@s.whatsapp.net") }
+
+// storeMedia converts the download keys of a message to the store row, or nil.
+func storeMedia(r *MediaRef) *store.Media {
+	if r == nil {
+		return nil
+	}
+	length := int64(math.MaxInt64)
+	if r.FileLength <= math.MaxInt64 {
+		length = int64(r.FileLength) // #nosec G115 -- bounded by the check above
+	}
+	return &store.Media{
+		Kind:          r.Kind,
+		Mimetype:      r.Mimetype,
+		DirectPath:    r.DirectPath,
+		MediaKey:      r.MediaKey,
+		FileSHA256:    r.FileSHA256,
+		FileEncSHA256: r.FileEncSHA256,
+		FileLength:    length,
+	}
+}
 
 // unixOr returns t as Unix seconds, or fallback when t is zero. A zero fallback
 // yields 0, which no unread check treats as new.

@@ -27,6 +27,7 @@ type Deps struct {
 	Client      wa.Client
 	Queue       QueueStats    // nil: the queue numbers are zero
 	Sender      Sender        // nil: sending is unavailable (send_disabled)
+	Media       MediaReader   // nil: read_media can only attach images (vision mode)
 	Config      config.Config // send limits shown by whatsapp_status
 	Clock       clock.Clock   // nil: clock.Real
 	Location    *time.Location
@@ -43,6 +44,7 @@ type env struct {
 	client    wa.Client
 	queue     QueueStats
 	sender    Sender
+	media     MediaReader
 	cfg       config.Config
 	clk       clock.Clock
 	loc       *time.Location
@@ -64,6 +66,7 @@ func New(d Deps) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "whatsapp-mcp", Version: d.Version},
 		&mcp.ServerOptions{Instructions: instructions, Logger: e.log})
 	e.addReadTools(srv)
+	e.addMediaTool(srv)
 	e.addWriteTools(srv)
 	e.addPrompts(srv)
 	return srv
@@ -93,6 +96,7 @@ func newEnv(d Deps) *env {
 		client:    d.Client,
 		queue:     d.Queue,
 		sender:    d.Sender,
+		media:     d.Media,
 		cfg:       d.Config,
 		clk:       clk,
 		loc:       loc,

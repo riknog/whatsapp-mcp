@@ -60,6 +60,25 @@ type Message struct {
 	Text      string
 	Caption   string
 	QuotedID  string
+	// Media is set by ingest for audio and image messages, and stored with the
+	// message. Reads of messages leave it nil; GetMedia returns it.
+	Media *Media
+}
+
+// Media is a row of media: how to download an audio or image message, and the
+// text extracted from it. The keys decrypt the file stored on WhatsApp's
+// servers; they never leave the process.
+type Media struct {
+	Kind          string // "image" | "audio"
+	Mimetype      string
+	DirectPath    string
+	MediaKey      []byte
+	FileSHA256    []byte
+	FileEncSHA256 []byte
+	FileLength    int64
+	Extracted     string // raw text; redacted when shown
+	ExtractedBy   string // "transcription" | "ocr" | ""
+	ExtractedAt   int64
 }
 
 // Label is a row of labels. Source is "whatsapp" or "local".

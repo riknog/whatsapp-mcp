@@ -28,6 +28,9 @@ type Fake struct {
 	contacts    []SentContact
 	presence    []PresenceEvent
 	reads       []ReadEvent
+	media       map[string][]byte
+	mediaErr    error
+	downloads   int
 	events      chan any
 }
 
@@ -243,6 +246,52 @@ func (f *Fake) MarkRead(_ context.Context, chat, sender JID, ids []string) error
 	defer f.mu.Unlock()
 	f.reads = append(f.reads, ReadEvent{At: f.clk.Now(), Chat: chat, Sender: sender, IDs: append([]string(nil), ids...)})
 	return nil
+}
+
+// SetMedia registers the bytes DownloadMedia returns for directPath.
+func (f *Fake) SetMedia(directPath string, data []byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.media == nil {
+		f.media = map[string][]byte{}
+	}
+	f.media[directPath] = append([]byte(nil), data...)
+}
+
+// SetMediaError makes every DownloadMedia call fail with err. Nil clears it.
+func (f *Fake) SetMediaError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.mediaErr = err
+}
+
+// DownloadMedia returns the bytes registered with SetMedia. An unknown path is
+// ErrMediaGone; a disconnected fake fails with ErrNetwork.
+func (f *Fake) DownloadMedia(_ context.Context, m Media) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.downloads++
+	if !f.connected {
+		return nil, ErrNetwork
+	}
+	if f.mediaErr != nil {
+		return nil, f.mediaErr
+	}
+	if m.Kind != "audio" && m.Kind != "image" {
+		return nil, ErrMediaKind
+	}
+	data, ok := f.media[m.DirectPath]
+	if !ok {
+		return nil, ErrMediaGone
+	}
+	return append([]byte(nil), data...), nil
+}
+
+// Downloads counts DownloadMedia calls.
+func (f *Fake) Downloads() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.downloads
 }
 
 // Events returns the channel that Inject feeds.

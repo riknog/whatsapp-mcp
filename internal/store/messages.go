@@ -56,7 +56,13 @@ func (s *Store) InsertMessage(ctx context.Context, m Message) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("store: inserir mensagem: %w", err)
 	}
+	if err := insertMedia(ctx, tx, m); err != nil {
+		return false, err
+	}
 	if n == 0 {
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("store: confirmar mídia: %w", err)
+		}
 		return false, nil
 	}
 	if _, err := tx.ExecContext(ctx,
