@@ -5,7 +5,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/riknog/whatsapp-mcp/internal/config"
 	"github.com/riknog/whatsapp-mcp/internal/privacy"
+	"github.com/riknog/whatsapp-mcp/internal/store"
 )
 
 type statusOut struct {
@@ -15,6 +17,13 @@ type statusOut struct {
 	AccountType string   `json:"account_type" jsonschema:"business or personal"`
 	LastEventAt string   `json:"last_event_at,omitempty" jsonschema:"ISO-8601 time of the last event from WhatsApp"`
 	Queue       queueOut `json:"queue"`
+	Media       mediaOut `json:"media"`
+}
+
+type mediaOut struct {
+	Enabled   bool   `json:"enabled" jsonschema:"read_media is on"`
+	Audio     bool   `json:"audio" jsonschema:"audio messages can be transcribed"`
+	ImageMode string `json:"image_mode" jsonschema:"how images are read: ocr, vision or off"`
 }
 
 type queueOut struct {
@@ -46,6 +55,7 @@ func (e *env) status(_ context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp
 			MaxQueue:                e.cfg.Send.MaxQueue,
 		}},
 	}
+	out.Media = e.mediaStatus()
 	if e.queue != nil {
 		s := e.queue.Stats()
 		out.Queue.Pending = s.Pending
@@ -57,4 +67,19 @@ func (e *env) status(_ context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp
 		}
 	}
 	return nil, out, nil
+}
+
+// mediaStatus says which media kinds read_media can read now.
+func (e *env) mediaStatus() mediaOut {
+	m := e.cfg.Media
+	out := mediaOut{Enabled: m.Enabled, ImageMode: config.ImageModeOff}
+	if !m.Enabled {
+		return out
+	}
+	_, audioErr := e.mediaSource(store.MediaAudio)
+	out.Audio = audioErr == nil
+	if source, err := e.mediaSource(store.MediaImage); err == nil {
+		out.ImageMode = source
+	}
+	return out
 }

@@ -24,6 +24,19 @@ type MessageEvent struct {
 	Caption  string
 	QuotedID string
 	Aliases  []AliasPair // LID/PN pairs seen on this message
+	Media    *MediaRef   // set for audio and image messages that can be downloaded
+}
+
+// MediaRef is what read_media needs to download an audio or image message
+// later. The keys only decrypt that one file.
+type MediaRef struct {
+	Kind          string // "audio" | "image"
+	Mimetype      string
+	DirectPath    string
+	MediaKey      []byte
+	FileSHA256    []byte
+	FileEncSHA256 []byte
+	FileLength    uint64
 }
 
 // ReceiptEvent is a delivery or read receipt. Type is the whatsmeow receipt type

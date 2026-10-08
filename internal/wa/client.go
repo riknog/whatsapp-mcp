@@ -25,5 +25,6 @@ type Client interface {
 	ContactPhone(jid JID) (string, bool) // only to build a vCard; never leaves the process by another path
 	SendPresence(ctx context.Context, chat JID, typing bool) error
 	MarkRead(ctx context.Context, chat JID, sender JID, ids []string) error
+	DownloadMedia(ctx context.Context, m Media) ([]byte, error)
 	Events() <-chan any // events already translated to internal/ingest types
 }

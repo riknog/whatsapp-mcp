@@ -49,6 +49,9 @@ func (s *Store) InsertMessages(ctx context.Context, msgs []Message) (int, error)
 		if err != nil {
 			return 0, fmt.Errorf("store: inserir mensagem: %w", err)
 		}
+		if err := insertMedia(ctx, tx, m); err != nil {
+			return 0, err
+		}
 		if n == 0 {
 			continue
 		}

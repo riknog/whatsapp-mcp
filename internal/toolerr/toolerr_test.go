@@ -79,6 +79,7 @@ func TestAllCodesMatchSpec(t *testing.T) {
 		"group_send_disabled", "policy_reply_only", "rate_limited", "queue_full",
 		"duplicate_message", "quiet_hours", "send_disabled", "message_too_long",
 		"invalid_argument", "send_failed", "send_uncertain",
+		"media_disabled", "media_unavailable", "media_tool_failed",
 	}
 	codes := AllCodes()
 	if len(codes) != len(spec) {

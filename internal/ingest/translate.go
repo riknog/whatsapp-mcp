@@ -42,6 +42,10 @@ func Translate(evt any) (any, bool) {
 		if !ok {
 			return nil, false
 		}
+		// whatsmeow has already unwrapped a view-once message: only its flags remain.
+		if e.IsViewOnce || e.IsViewOnceV2 || e.IsViewOnceV2Extension || isViewOnce(e.RawMessage) {
+			m.Media = nil
+		}
 		return m, true
 
 	case *events.Receipt:
@@ -167,6 +171,7 @@ func buildMessage(chat, sender, id string, fromMe bool, ts time.Time, m *waE2E.M
 		Text:     c.text,
 		Caption:  c.caption,
 		QuotedID: c.quoted,
+		Media:    c.media,
 	}
 	if !fromMe {
 		ev.Sender = sender
@@ -207,12 +212,48 @@ type content struct {
 	text    string
 	caption string
 	quoted  string
+	media   *MediaRef
+}
+
+// downloadable is the part of a whatsmeow media message that read_media needs.
+type downloadable interface {
+	GetDirectPath() string
+	GetMediaKey() []byte
+	GetFileSHA256() []byte
+	GetFileEncSHA256() []byte
+	GetFileLength() uint64
+	GetMimetype() string
+}
+
+// mediaRef keeps the download keys of a media message, or nil without them.
+func mediaRef(kind string, x downloadable) *MediaRef {
+	if x.GetDirectPath() == "" || len(x.GetMediaKey()) == 0 {
+		return nil
+	}
+	return &MediaRef{
+		Kind:          kind,
+		Mimetype:      x.GetMimetype(),
+		DirectPath:    x.GetDirectPath(),
+		MediaKey:      x.GetMediaKey(),
+		FileSHA256:    x.GetFileSHA256(),
+		FileEncSHA256: x.GetFileEncSHA256(),
+		FileLength:    x.GetFileLength(),
+	}
 }
 
 // contentOf maps a WhatsApp message to a kind and its text. It returns false
 // for protocol messages, reactions and other messages that are not stored.
 func contentOf(m *waE2E.Message) (content, bool) {
-	m = unwrap(m)
+	c, ok := contentOfUnwrapped(unwrap(m))
+	if ok && isViewOnce(m) {
+		// A view-once photo or audio was meant to be seen once by the owner: it
+		// is never kept for read_media.
+		c.media = nil
+	}
+	return c, ok
+}
+
+func contentOfUnwrapped(m *waE2E.Message) (content, bool) {
 	if m == nil || skipMessage(m) {
 		return content{}, false
 	}
@@ -224,13 +265,15 @@ func contentOf(m *waE2E.Message) (content, bool) {
 		return content{kind: "text", text: x.GetText(), quoted: x.GetContextInfo().GetStanzaID()}, true
 	case m.ImageMessage != nil:
 		x := m.GetImageMessage()
-		return content{kind: "image", text: markImage, caption: x.GetCaption(), quoted: x.GetContextInfo().GetStanzaID()}, true
+		return content{kind: "image", text: markImage, caption: x.GetCaption(), quoted: x.GetContextInfo().GetStanzaID(),
+			media: mediaRef("image", x)}, true
 	case m.VideoMessage != nil:
 		x := m.GetVideoMessage()
 		return content{kind: "video", text: markVideo, caption: x.GetCaption(), quoted: x.GetContextInfo().GetStanzaID()}, true
 	case m.AudioMessage != nil:
 		x := m.GetAudioMessage()
-		return content{kind: "audio", text: audioMark(x.GetSeconds()), quoted: x.GetContextInfo().GetStanzaID()}, true
+		return content{kind: "audio", text: audioMark(x.GetSeconds()), quoted: x.GetContextInfo().GetStanzaID(),
+			media: mediaRef("audio", x)}, true
 	case m.DocumentMessage != nil:
 		x := m.GetDocumentMessage()
 		return content{kind: "document", text: markDocument, caption: x.GetCaption(), quoted: x.GetContextInfo().GetStanzaID()}, true
@@ -282,6 +325,24 @@ func unwrap(m *waE2E.Message) *waE2E.Message {
 		}
 	}
 	return m
+}
+
+// isViewOnce reports whether m, or a container inside it, is a view-once message.
+func isViewOnce(m *waE2E.Message) bool {
+	for i := 0; i < 4 && m != nil; i++ {
+		if m.GetViewOnceMessage() != nil || m.GetViewOnceMessageV2() != nil || m.GetViewOnceMessageV2Extension() != nil {
+			return true
+		}
+		switch {
+		case m.GetEphemeralMessage() != nil:
+			m = m.GetEphemeralMessage().GetMessage()
+		case m.GetDocumentWithCaptionMessage() != nil:
+			m = m.GetDocumentWithCaptionMessage().GetMessage()
+		default:
+			return m.GetImageMessage().GetViewOnce() || m.GetAudioMessage().GetViewOnce()
+		}
+	}
+	return false
 }
 
 // audioMark shows the duration of an audio message, as in "[áudio 0:42]".

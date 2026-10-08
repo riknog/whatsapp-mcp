@@ -24,6 +24,36 @@ type Config struct {
 	Send    SendConfig    `toml:"send"`
 	Share   ShareConfig   `toml:"share"`
 	Read    ReadConfig    `toml:"read"`
+	Media   MediaConfig   `toml:"media"`
+}
+
+// Image modes of [media] image_mode.
+const (
+	ImageModeOCR    = "ocr"    // local OCR command; the model gets redacted text
+	ImageModeVision = "vision" // the image itself goes to the model, unredacted
+	ImageModeOff    = "off"
+)
+
+// MediaConfig is the [media] section: reading audio and images on demand
+// (tool read_media). Everything is off by default. The commands run on this
+// machine; the media file never leaves it unless image_mode is "vision".
+type MediaConfig struct {
+	Enabled bool `toml:"enabled"`
+	// MaxMB is the largest file that is downloaded.
+	MaxMB int `toml:"max_mb"`
+	// TimeoutS bounds one download plus one transcription or OCR.
+	TimeoutS int `toml:"timeout_s"`
+	// AudioCommand transcribes audio. Placeholders: {input} (the file as
+	// received), {wav} (16 kHz mono WAV made with FFmpeg), {outdir} (a scratch
+	// directory: when used, the text is read from the .txt files written there;
+	// otherwise from stdout). Empty disables audio.
+	AudioCommand []string `toml:"audio_command"`
+	ImageMode    string   `toml:"image_mode"`
+	// OCRCommand reads the text of an image, with the same placeholders
+	// ({input}, {outdir}). Used when image_mode is "ocr".
+	OCRCommand []string `toml:"ocr_command"`
+	// FFmpeg is the program used for {wav}.
+	FFmpeg string `toml:"ffmpeg"`
 }
 
 // PrivacyConfig is the [privacy] section.
@@ -118,8 +148,23 @@ func Defaults() Config {
 			MarkReadEnabled: true,
 			HistorySyncDays: 30,
 		},
+		Media: MediaConfig{
+			Enabled:      false,
+			MaxMB:        16,
+			TimeoutS:     120,
+			AudioCommand: []string{},
+			ImageMode:    ImageModeOCR,
+			OCRCommand:   []string{},
+			FFmpeg:       "ffmpeg",
+		},
 	}
 }
+
+// Limits of [media].
+const (
+	maxMediaMB       = 100
+	maxMediaTimeoutS = 3600
+)
 
 // Load reads home/config.toml over the defaults, rejects unknown keys, and
 // validates the result. A missing file means defaults. Every validation error
@@ -187,6 +232,31 @@ func validate(cfg *Config) []error {
 	}
 	if _, err := ParseQuietHours(s.QuietHours); err != nil {
 		add(fmt.Errorf("send.quiet_hours: %w", err))
+	}
+	errs = append(errs, validateMedia(cfg.Media)...)
+	return errs
+}
+
+func validateMedia(m MediaConfig) []error {
+	var errs []error
+	if m.MaxMB <= 0 || m.MaxMB > maxMediaMB {
+		errs = append(errs, fmt.Errorf("media.max_mb: esperado entre 1 e %d (recebido %d)", maxMediaMB, m.MaxMB))
+	}
+	if m.TimeoutS <= 0 || m.TimeoutS > maxMediaTimeoutS {
+		errs = append(errs, fmt.Errorf("media.timeout_s: esperado entre 1 e %d (recebido %d)", maxMediaTimeoutS, m.TimeoutS))
+	}
+	switch m.ImageMode {
+	case ImageModeOCR, ImageModeVision, ImageModeOff:
+	default:
+		errs = append(errs, fmt.Errorf("media.image_mode: valor inválido %q (use \"ocr\", \"vision\" ou \"off\")", m.ImageMode))
+	}
+	for _, c := range []struct {
+		key string
+		cmd []string
+	}{{"media.audio_command", m.AudioCommand}, {"media.ocr_command", m.OCRCommand}} {
+		if len(c.cmd) > 0 && c.cmd[0] == "" {
+			errs = append(errs, fmt.Errorf("%s: o primeiro item (o programa) não pode ser vazio", c.key))
+		}
 	}
 	return errs
 }

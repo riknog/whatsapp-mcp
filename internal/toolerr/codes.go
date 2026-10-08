@@ -21,6 +21,9 @@ const (
 	CodeInvalidArgument     Code = "invalid_argument"
 	CodeSendFailed          Code = "send_failed"
 	CodeSendUncertain       Code = "send_uncertain"
+	CodeMediaDisabled       Code = "media_disabled"
+	CodeMediaUnavailable    Code = "media_unavailable"
+	CodeMediaToolFailed     Code = "media_tool_failed"
 )
 
 // AllCodes lists every code defined in this package, in doc order.
@@ -45,5 +48,8 @@ func AllCodes() []Code {
 		CodeInvalidArgument,
 		CodeSendFailed,
 		CodeSendUncertain,
+		CodeMediaDisabled,
+		CodeMediaUnavailable,
+		CodeMediaToolFailed,
 	}
 }

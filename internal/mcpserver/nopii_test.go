@@ -47,6 +47,9 @@ var noPIICalls = []struct {
 	{"search_contacts", map[string]any{"query": "a", "limit": 30}},
 	{"search_contacts", map[string]any{"query": "5511900000001"}},
 	{"list_categories", nil},
+	{"read_media", map[string]any{"contact": "Mãe", "message_id": "3EB0AAAAAA"}},
+	{"read_media", map[string]any{"contact": "5511900000001", "message_id": "3EB0AAAAAA"}},
+	{"read_media", map[string]any{"contact": "Banco Exemplo", "message_id": "3EB0AAAAAA"}},
 	// Write tools last: they change the state the read calls above expect.
 	{"send_message", map[string]any{"contact": "Desconhecido", "text": "Oi"}},
 	{"send_message", map[string]any{"contact": "5511900000001", "text": "Oi"}},
