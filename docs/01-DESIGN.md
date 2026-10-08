@@ -62,10 +62,11 @@ Go é só dependência de build; quem receber o binário pronto não precisa ins
 | `wa` | Wrapper do whatsmeow atrás da interface `wa.Client` (mockável). Conexão, reconexão, login, envio, presença, recibos de leitura. |
 | `ingest` | Converte eventos do whatsmeow (`Message`, `HistorySync`, `Receipt`, `Contact`, `PushName`, `Label*`) em linhas do `store`. Normaliza LID ↔ PN. |
 | `identity` | `contact_ref` opaco (HMAC), nome de exibição, busca por nome sem acento, desambiguação, chats ocultos. |
-| `privacy` | Redação de números em texto, filtros de saída. |
+| `privacy` | Redação de números, e-mails, CPF e CNPJ em texto, filtros de saída. |
+| `media` | Roda o transcritor e o OCR configurados (sem shell, arquivo temporário apagado na hora). |
 | `sendqueue` | Fila FIFO única, worker único, cooldowns, limites globais, deduplicação. |
 | `mcpserver` | Registro das tools, validação de entrada, formatação da saída. |
-| `cmd/whatsapp-mcp` | CLI: `login`, `serve`, `status`, `hide`, `unhide`, `category`, `purge`, `logout`. |
+| `cmd/whatsapp-mcp` | CLI: `login`, `serve`, `status`, `hide`, `unhide`, `category`, `purge`, `watch`, `logout`. |
 
 ### Ciclo de vida
 
@@ -98,6 +99,9 @@ messages(
   text TEXT, caption TEXT, quoted_id TEXT,
   PRIMARY KEY (chat_jid, id)
 );
+media(pk INTEGER PRIMARY KEY REFERENCES messages(pk) ON DELETE CASCADE, -- só áudio e imagem
+      kind TEXT, mimetype TEXT, direct_path TEXT, media_key BLOB, file_sha256 BLOB, file_enc_sha256 BLOB,
+      file_length INTEGER, extracted TEXT, extracted_by TEXT, extracted_at INTEGER); -- chaves + cache do texto
 messages_fts USING fts5(text, caption, content='messages', tokenize='unicode61 remove_diacritics 2');
 shareable_contacts(jid TEXT PRIMARY KEY, added_at INTEGER);  -- contatos que o Claude pode compartilhar
 labels(id TEXT PRIMARY KEY, name TEXT, color INTEGER, deleted INTEGER DEFAULT 0, source TEXT); -- 'whatsapp' | 'local'
@@ -113,7 +117,10 @@ kv(key TEXT PRIMARY KEY, value TEXT);  -- versão do schema, etc.
 - `session.db` é do whatsmeow (credenciais do dispositivo vinculado). Arquivos separados = dá
   para apagar dados de mensagens sem perder o login, e vice-versa.
 - O `ref_secret` (32 bytes aleatórios) fica em `~/.whatsapp-mcp/ref.key` (0600).
-- Mídia **não é baixada**. Só tipo + legenda.
+- Mídia **não é baixada** na ingestão: guarda tipo + legenda e, para áudio e imagem, as chaves de
+  download (tabela `media`; visualização única nunca). O arquivo só é baixado quando o Claude chama
+  `read_media`, e só se `[media] enabled = true`; vai para uma pasta temporária e é apagado depois.
+  O texto extraído fica em cache na tabela `media` e some com a mensagem (purge, retenção).
 
 ## 5. Identidade e nomes (núcleo da LGPD)
 
@@ -132,9 +139,13 @@ kv(key TEXT PRIMARY KEY, value TEXT);  -- versão do schema, etc.
   a tool retorna `ambiguous_contact` com os candidatos (`name`, `contact_ref`, categoria, última
   interação) e não envia. O Claude repete usando o `contact_ref`.
 - Texto das mensagens: números de telefone dentro do texto são mascarados (`+55 11 9****-**21`)
-  quando `privacy.redact_phone_numbers_in_text = true` (default).
+  quando `privacy.redact_phone_numbers_in_text = true` (default). E-mails (`j***@dominio`), CPF
+  (`***.***.***-NN`) e CNPJ (`**.***.***/****-NN`) também; um CPF/CNPJ sem pontuação só é mascarado
+  se os dígitos verificadores baterem. Vale também para transcrição e OCR de `read_media`.
 - Chats ocultos (`whatsapp-mcp hide "Banco X"`): somem de todas as tools, inclusive busca, e não
   podem receber envio. Para conversas que o dono não quer que a IA veja (médico, banco, etc.).
+  Também funciona para um contato salvo sem conversa (o chat nasce oculto). Limites: as mensagens
+  continuam guardadas no `data.db`, e o que a pessoa escreve em grupos continua visível.
 
 ## 6. Categorias ("listas" / etiquetas)
 
@@ -167,6 +178,11 @@ Dois cursores por chat, independentes:
 agrupadas por chat, e avança o `agent_cursor` (a menos que `peek=true`). Isso **não** manda tique azul;
 quem faz isso é `mark_as_read`, explicitamente. Assim o Claude pode "dar uma olhada" sem denunciar
 que leu, igual a um humano lendo pela notificação.
+
+`whatsapp-mcp watch` lê o `data.db` (sem conexão com o WhatsApp e sem a trava do `serve`) e imprime no
+stdout uma linha por conversa com mensagem recebida nova e ainda não vista (mesmo critério de
+`list_new_messages`): nome, `contact_ref` e contagem, nunca o texto. Serve ao Monitor do Claude Code;
+`--once` lista as pendentes e sai, para um hook `UserPromptSubmit`.
 
 ## 8. Fila de envio
 
@@ -222,13 +238,22 @@ require_allowlist = true      # só contatos marcados com `whatsapp-mcp shareabl
 [read]
 mark_read_enabled = true
 history_sync_days = 30
+
+[media]
+enabled = false
+max_mb = 16
+timeout_s = 120
+audio_command = []             # ex.: ["whisper-cli", "-m", "modelo.bin", "-l", "pt", "-nt", "-f", "{wav}"]
+image_mode = "ocr"             # "ocr" | "vision" (imagem ao modelo, sem redação) | "off"
+ocr_command = []               # ex.: ["tesseract", "{input}", "stdout", "-l", "por"]
+ffmpeg = "ffmpeg"
 ```
 
 Variável `WHATSAPP_MCP_HOME` sobrescreve o diretório de dados.
 
 ## 11. Ideias extras (backlog, fora do v1)
 
-- `get_media_text`: transcrever áudio / OCR de imagem **localmente** (sob demanda, por mensagem).
+- ~~`get_media_text`~~: feito como `read_media`.
 - `react_to_message` (👍) — resposta humana mínima.
 - `draft_mode`: o Claude escreve rascunhos que o dono aprova por CLI antes de sair.
 - `summarize_chat` server-side com cache, para conversas longas.
