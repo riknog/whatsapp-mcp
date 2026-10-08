@@ -1,0 +1,12 @@
+{
+  "name": "whatsapp",
+  "version": "0.1.0",
+  "description": "Instala, configura e ensina o Claude a usar o whatsapp-mcp: ler e responder o WhatsApp sem nunca ver números de telefone.",
+  "author": {
+    "name": "riknog"
+  },
+  "homepage": "https://github.com/riknog/whatsapp-mcp",
+  "repository": "https://github.com/riknog/whatsapp-mcp",
+  "license": "MIT",
+  "keywords": ["whatsapp", "mcp", "mensagens"]
+}

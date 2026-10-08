@@ -1,0 +1,7 @@
+bin/
+*.db
+*.db-*
+cover.txt
+coverage.out
+*.test
+*.prof

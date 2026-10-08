@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-mcp",
+  "description": "Plugin do whatsapp-mcp para o Claude Code: instala o servidor MCP do WhatsApp e ensina o Claude a usá-lo.",
+  "owner": {
+    "name": "riknog"
+  },
+  "plugins": [
+    {
+      "name": "whatsapp",
+      "source": "./plugin",
+      "description": "Instala, configura e ensina o Claude a usar o whatsapp-mcp: ler e responder o WhatsApp sem nunca ver números de telefone."
+    }
+  ]
+}
